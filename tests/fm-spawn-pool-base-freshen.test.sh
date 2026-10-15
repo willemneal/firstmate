@@ -455,9 +455,9 @@ test_unresolved_remote_default_refuses_pool() {
 
 # A slot left on a stale submodule pin is the field failure this diagnosis exists
 # for: a refresh moved the superproject and left the submodule behind, so the
-# refusal fires a spawn later, on a slot whose own `git status` looks clean to the
-# operator. Nothing here is converged - the gate only has to say why. The fixture
-# only builds the repositories; the residue itself is produced by a real spawn, so
+# refusal fired a spawn later, on a slot whose own `git status` looks clean to the
+# operator. A pin whose checkout a freshly fetched remote contains is converged;
+# everything else is refused and left untouched. The fixture only builds the repositories; the residue itself is produced by a real spawn, so
 # these tests cover the reset that actually strands the submodule.
 make_submodule_case() {  # <name> <id>
   local name=$1 id=$2 case_dir home project origin pool publisher fakebin sub subpin1 subpin2 advanced
@@ -530,39 +530,90 @@ strand_submodule_pin_via_spawn() {  # <seed-id>
     || fail "the first spawn did not strand the submodule on the pin the old base recorded"
 }
 
-test_stale_submodule_pin_explains_itself() {
-  local rec id out status before before_sub
+test_stale_submodule_pin_converges_and_launches() {
+  local rec id out status before
   id='pool-stale-pin-r7'
   rec=$(make_submodule_case stale-pin "$id")
   read_submodule_case "$rec"
   strand_submodule_pin_via_spawn 'pool-stale-pin-seed-r7'
-  git -C "$POOL_DIR" remote remove origin
   before=$(git -C "$POOL_DIR" rev-parse HEAD)
-  before_sub=$(git -C "$POOL_DIR/ui" rev-parse HEAD)
 
   out=$(run_spawn "$id" --mode no-mistakes --yolo off)
   status=$?
-  [ "$status" -ne 0 ] || fail "the second spawn launched from a slot carrying a stale submodule pin"
+  expect_code 0 "$status" "a stale submodule pin whose checkout its remote contains should converge and launch: $out"
+  assert_contains "$out" "spawned $id" "the converged slot did not launch"
+  assert_contains "$out" "converged submodule 'ui'" "convergence did not name the submodule it moved"
+  assert_not_contains "$out" "refusing" "a convergible stale pin still drew a refusal"
+  [ "$(git -C "$POOL_DIR/ui" rev-parse HEAD)" = "$SUBPIN2" ] \
+    || fail "spawn did not converge the submodule to the pin the base records"
+  [ "$(git -C "$POOL_DIR" rev-parse HEAD)" = "$before" ] \
+    || fail "the converged slot did not launch from the current origin base"
+  [ -z "$(git -C "$POOL_DIR" status --porcelain)" ] \
+    || fail "the converged slot was not clean at launch"
+  pass "a stale submodule pin that its fetched remote contains is converged and the spawn launches"
+}
+
+test_submodule_fetch_failure_keeps_stale_pin_refusal() {
+  local rec id out status before
+  id='pool-sub-nofetch-r12'
+  rec=$(make_submodule_case sub-nofetch "$id")
+  read_submodule_case "$rec"
+  strand_submodule_pin_via_spawn 'pool-sub-nofetch-seed-r12'
+  # The submodule's remote is now unreachable, so containment cannot be proven
+  # fresh. The slot must be refused exactly as before this convergence existed.
+  git -C "$POOL_DIR/ui" remote set-url origin "file://$CASE_DIR/missing-sub-origin"
+  before=$(git -C "$POOL_DIR" rev-parse HEAD)
+
+  out=$(run_spawn "$id" --mode no-mistakes --yolo off)
+  status=$?
+  [ "$status" -ne 0 ] || fail "spawn launched although the submodule's remote could not be fetched"
+  assert_contains "$out" "could not fetch remote 'origin' of submodule 'ui'" \
+    "the refusal did not say the submodule fetch failed"
   assert_contains "$out" "stale submodule checkout" \
     "refusal did not name the cause as a stale submodule checkout"
-  assert_contains "$out" "submodule 'ui'" "refusal did not name the submodule"
   assert_contains "$out" "$SUBPIN1" "refusal did not report the pin the slot actually has"
   assert_contains "$out" "$SUBPIN2" "refusal did not report the pin the base records"
-  # No remedy is printed on purpose: the containment check reads local refs only,
-  # so a stale remote-tracking ref can make an unpushed commit look contained, and
-  # a checkout command on that judgement could cost the operator a commit.
-  assert_not_contains "$out" "submodule update --checkout" \
-    "refusal printed a remedy command the containment check cannot stand behind"
-  assert_not_contains "$out" "refusing to discard uncommitted work" \
-    "a stale pin was misreported as uncommitted work"
+  assert_not_contains "$out" "converged submodule" "spawn claimed convergence after a failed fetch"
+  [ "$(git -C "$POOL_DIR/ui" rev-parse HEAD)" = "$SUBPIN1" ] \
+    || fail "spawn moved the submodule although its remote could not be fetched"
   [ "$(git -C "$POOL_DIR" rev-parse HEAD)" = "$before" ] \
     || fail "spawn moved HEAD while refusing a stale submodule pin"
-  [ "$(git -C "$POOL_DIR/ui" rev-parse HEAD)" = "$before_sub" ] \
-    || fail "spawn converged the submodule; this gate must never touch the slot"
   if [ "${FM_TEST_EVIDENCE:-0}" = 1 ]; then
     printf '# observed stale-pin refusal: %s\n' "$(printf '%s\n' "$out" | grep 'submodule' | head -n 1)"
   fi
-  pass "an origin-less pool with a stale submodule pin refuses while naming both pins and no remedy"
+  pass "a stale submodule pin whose remote cannot be fetched is refused and left untouched"
+}
+
+test_deleted_upstream_branch_is_not_containment() {
+  local rec id out status sub_origin pushed
+  id='pool-sub-deleted-r13'
+  rec=$(make_submodule_case sub-deleted "$id")
+  read_submodule_case "$rec"
+  strand_submodule_pin_via_spawn 'pool-sub-deleted-seed-r13'
+  # A commit pushed to a branch that upstream later deleted still sits under a
+  # local remote-tracking ref, so only a pruning fetch shows it is unpushed now.
+  sub_origin=$(git -C "$POOL_DIR/ui" remote get-url origin)
+  sub_origin=${sub_origin#file://}
+  printf 'pushed then orphaned\n' > "$POOL_DIR/ui/orphan.txt"
+  git -C "$POOL_DIR/ui" add orphan.txt
+  git -C "$POOL_DIR/ui" -c user.name='Firstmate Tests' -c user.email='tests@example.invalid' \
+    commit -qm orphaned-submodule-work
+  pushed=$(git -C "$POOL_DIR/ui" rev-parse HEAD)
+  git -C "$POOL_DIR/ui" push --quiet origin "HEAD:refs/heads/topic"
+  git -C "$POOL_DIR/ui" fetch --quiet origin
+  git -C "$sub_origin" branch -q -D topic
+  git -C "$POOL_DIR/ui" rev-parse --verify --quiet refs/remotes/origin/topic >/dev/null \
+    || fail "fixture did not leave a stale remote-tracking ref behind"
+
+  out=$(run_spawn "$id" --mode no-mistakes --yolo off)
+  status=$?
+  [ "$status" -ne 0 ] || fail "spawn launched from a submodule commit only a deleted upstream branch held"
+  assert_contains "$out" "refusing to discard uncommitted work" \
+    "a commit only a stale remote-tracking ref held was not refused as uncommitted work"
+  assert_not_contains "$out" "converged submodule" "spawn converged on a stale remote-tracking ref"
+  [ "$(git -C "$POOL_DIR/ui" rev-parse HEAD)" = "$pushed" ] \
+    || fail "spawn moved the submodule off a commit no remote holds any more"
+  pass "a commit held only by a deleted upstream branch is refused, not converged"
 }
 
 test_unpushed_submodule_commit_is_still_uncommitted_work() {
@@ -758,7 +809,9 @@ test_origin_config_without_url_refuses_pool
 test_empty_origin_config_section_refuses_pool
 test_empty_only_included_origin_config_section_launches_pool
 test_inactive_conditional_origin_include_launches_pool
-test_stale_submodule_pin_explains_itself
+test_stale_submodule_pin_converges_and_launches
+test_submodule_fetch_failure_keeps_stale_pin_refusal
+test_deleted_upstream_branch_is_not_containment
 test_unpushed_submodule_commit_is_still_uncommitted_work
 test_work_inside_submodule_is_still_uncommitted_work
 test_stale_pin_carrying_real_work_is_not_called_stale
