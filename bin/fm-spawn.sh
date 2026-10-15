@@ -250,17 +250,21 @@
 #   fetching or resetting its base. An unreachable detected origin, unresolved
 #   default branch, or non-clean worktree refuses a fresh spawn rather than
 #   risking a PR based on stale history or discarding local work.
-#   A slot whose only deviation is one stale submodule gitlink - a clean
-#   submodule checked out at a commit other than the pin the base records - is
-#   converged instead of refused: spawn fetches every remote of that submodule
-#   with pruning, proves the checked-out commit is contained in those freshly
-#   fetched remote-tracking refs, then runs `git submodule update --init` for
-#   that path only and continues once the slot is clean. Every other case keeps
-#   the refusal and leaves the slot's work in place: a submodule fetch that
-#   fails, a submodule with no remote, an unpushed submodule commit, edits or
-#   untracked files inside the submodule, or more than one deviation. When such
-#   a refusal still has only stale pins to report, it names each submodule and
-#   both pins as a stale checkout rather than uncommitted work; a submodule
+#   A slot whose only deviations are stale submodule gitlinks - clean
+#   submodules checked out at commits other than the pins the base records - is
+#   converged instead of refused: spawn fetches every remote of each such
+#   submodule with pruning, proves every checked-out commit is contained in
+#   those freshly fetched remote-tracking refs, then runs
+#   `git submodule update --init --checkout` for exactly those paths and
+#   continues once the slot is clean. The same convergence runs again after the
+#   reset to the origin tip, so a base that repins a submodule launches the
+#   worker on the new pin; if that post-reset slot is not clean and cannot be
+#   converged, the launch is refused. Every other case keeps the refusal and
+#   leaves the slot's work in place, with no submodule moved: a submodule fetch
+#   that fails, a submodule with no remote, an unpushed submodule commit, edits
+#   or untracked files inside a submodule, or any non-submodule deviation. When
+#   such a refusal still has only stale pins to report, it names each submodule
+#   and both pins as a stale checkout rather than uncommitted work; a submodule
 #   whose commit no remote contains keeps the uncommitted-work refusal.
 # Batch dispatch: pass one or more `id=repo` pairs instead of a single <id> <project>, e.g.
 #     fm-spawn.sh fix-a-k3=projects/foo add-b-q7=projects/bar [--scout]
@@ -3273,37 +3277,51 @@ stale_submodule_pin_entry() { # <worktree> <status-line>
   [ "$STALE_PIN_WANT" != "$STALE_PIN_HAVE" ]
 }
 
-# Converge a slot whose single deviation is one stale submodule pin. Moving the
+# Converge a slot whose only deviations are stale submodule pins. Moving a
 # submodule off its checked-out commit is only safe when a remote holds that
 # commit, and local remote-tracking refs cannot prove that on their own: an
 # upstream branch deleted or force-pushed since the last fetch still reads as
-# containment. So every remote of the submodule is fetched with pruning first,
-# and containment is read only from those freshly fetched refs. Any failure -
+# containment. So every remote of every stale submodule is fetched with pruning
+# first, and containment is read only from those freshly fetched refs. Nothing
+# is moved until every entry qualifies; any failure - a non-submodule deviation,
 # a fetch error, no remote, an uncontained commit, an update that does not leave
 # the slot clean - returns non-zero so the caller keeps its refusal.
-converge_stale_submodule_pin() { # <worktree> <status>
-  local worktree=$1 status=$2 sub remote remotes unpushed
-  local -a contained=()
-  case $status in *$'\n'*) return 1 ;; esac
-  stale_submodule_pin_entry "$worktree" "$status" || return 1
-  sub="$worktree/$STALE_PIN_PATH"
-  remotes=$(git -C "$sub" remote 2>/dev/null) || return 1
-  [ -n "$remotes" ] || return 1
-  while IFS= read -r remote; do
-    [ -n "$remote" ] || continue
-    if ! GIT_TERMINAL_PROMPT=0 git -C "$sub" fetch --quiet --prune "$remote" </dev/null >/dev/null 2>&1; then
-      echo "warning: could not fetch remote '$remote' of submodule '$STALE_PIN_PATH' to prove its checkout is pushed" >&2
-      return 1
-    fi
-    contained+=("--remotes=$remote")
+converge_stale_submodule_pins() { # <worktree> <status>
+  local worktree=$1 status=$2 line sub remote remotes unpushed i
+  local -a paths=() wants=() haves=() contained
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    stale_submodule_pin_entry "$worktree" "$line" || return 1
+    paths+=("$STALE_PIN_PATH")
+    wants+=("$STALE_PIN_WANT")
+    haves+=("$STALE_PIN_HAVE")
   done <<EOF
+$status
+EOF
+  [ "${#paths[@]}" -gt 0 ] || return 1
+  for i in "${!paths[@]}"; do
+    sub="$worktree/${paths[$i]}"
+    remotes=$(git -C "$sub" remote 2>/dev/null) || return 1
+    [ -n "$remotes" ] || return 1
+    contained=()
+    while IFS= read -r remote; do
+      [ -n "$remote" ] || continue
+      if ! GIT_TERMINAL_PROMPT=0 git -C "$sub" fetch --quiet --prune "$remote" </dev/null >/dev/null 2>&1; then
+        echo "warning: could not fetch remote '$remote' of submodule '${paths[$i]}' to prove its checkout is pushed" >&2
+        return 1
+      fi
+      contained+=("--remotes=$remote")
+    done <<EOF
 $remotes
 EOF
-  unpushed=$(git -C "$sub" rev-list --max-count=1 "$STALE_PIN_HAVE" --not "${contained[@]}" -- 2>/dev/null) || return 1
-  [ -z "$unpushed" ] || return 1
-  git -C "$worktree" submodule --quiet update --init -- "$STALE_PIN_PATH" >/dev/null 2>&1 || return 1
+    unpushed=$(git -C "$sub" rev-list --max-count=1 "${haves[$i]}" --not "${contained[@]}" -- 2>/dev/null) || return 1
+    [ -z "$unpushed" ] || return 1
+  done
+  git -C "$worktree" submodule --quiet update --init --checkout -- "${paths[@]}" >/dev/null 2>&1 || return 1
   [ -z "$(git -C "$worktree" status --porcelain 2>/dev/null)" ] || return 1
-  echo "note: converged submodule '$STALE_PIN_PATH' in pooled worktree '$worktree' from $STALE_PIN_HAVE, which its remote contains, to the recorded pin $STALE_PIN_WANT" >&2
+  for i in "${!paths[@]}"; do
+    echo "note: converged submodule '${paths[$i]}' in pooled worktree '$worktree' from ${haves[$i]}, which its remote contains, to the recorded pin ${wants[$i]}" >&2
+  done
 }
 
 # When a slot cannot be converged, a refusal whose entries are all stale pins
@@ -3348,7 +3366,7 @@ freshen_spawn_worktree_base() { # <worktree>
     echo "error: could not inspect pooled worktree '$worktree' before refreshing its base" >&2
     return 1
   }
-  if [ -n "$status" ] && converge_stale_submodule_pin "$worktree" "$status"; then
+  if [ -n "$status" ] && converge_stale_submodule_pins "$worktree" "$status"; then
     status=
   fi
   if [ -n "$status" ]; then
@@ -3390,6 +3408,14 @@ freshen_spawn_worktree_base() { # <worktree>
   actual=$(git -C "$worktree" rev-parse --verify --quiet HEAD 2>/dev/null || true)
   if [ "$actual" != "$expected" ]; then
     echo "error: pooled worktree '$worktree' is at '${actual:-unknown}', not current '$target' ('$expected'); refusing to launch" >&2
+    return 1
+  fi
+  status=$(git -C "$worktree" -c core.quotePath=false status --porcelain) || {
+    echo "error: could not inspect pooled worktree '$worktree' after resetting it to '$target'" >&2
+    return 1
+  }
+  if [ -n "$status" ] && ! converge_stale_submodule_pins "$worktree" "$status"; then
+    echo "error: pooled worktree '$worktree' is not clean after resetting to '$target' and its submodule checkouts could not be converged to the recorded pins; refusing to launch" >&2
     return 1
   fi
 }
