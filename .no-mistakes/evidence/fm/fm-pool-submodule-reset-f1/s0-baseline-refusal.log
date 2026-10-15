@@ -1,0 +1,4 @@
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /var/folders/dl/tpw6wbvd18z24n2q2842lb500000gn/T//fm-lab.KcQUQf
+warning: /var/folders/dl/tpw6wbvd18z24n2q2842lb500000gn/T//fm-lab.KcQUQf/data/perch-base-b2/launch-brief.md records no ship branch; defaulting to legacy branch fm/perch-base-b2
+warning: /var/folders/dl/tpw6wbvd18z24n2q2842lb500000gn/T//fm-lab.KcQUQf/data/perch-base-b2/launch-brief.md records no delivery contract line (scaffolded before ship briefs recorded one); launching on the explicit --mode no-mistakes - confirm its definition of done matches
+spawned perch-base-b2 harness=claude kind=ship mode=no-mistakes yolo=off window=primary:fm-perch-base-b2 worktree=/private/var/folders/dl/tpw6wbvd18z24n2q2842lb500000gn/T/fm-lab.KcQUQf/pool/.treehouse/nido-db85b7/2/nido

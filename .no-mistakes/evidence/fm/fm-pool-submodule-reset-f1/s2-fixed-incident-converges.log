@@ -1,0 +1,5 @@
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /var/folders/dl/tpw6wbvd18z24n2q2842lb500000gn/T//fm-lab.KcQUQf
+warning: /var/folders/dl/tpw6wbvd18z24n2q2842lb500000gn/T//fm-lab.KcQUQf/data/perch-stale-c3/launch-brief.md records no ship branch; defaulting to legacy branch fm/perch-stale-c3
+warning: /var/folders/dl/tpw6wbvd18z24n2q2842lb500000gn/T//fm-lab.KcQUQf/data/perch-stale-c3/launch-brief.md records no delivery contract line (scaffolded before ship briefs recorded one); launching on the explicit --mode no-mistakes - confirm its definition of done matches
+note: converged submodule 'vendor/perch' in pooled worktree '/private/var/folders/dl/tpw6wbvd18z24n2q2842lb500000gn/T/fm-lab.KcQUQf/pool/.treehouse/nido-db85b7/2/nido' from 4d4fa8c06210719fa530d4208b73600325fabdf0, which its remote contains, to the recorded pin 726d56d6d8bf184037a40b5fa24a558ec132632e
+spawned perch-stale-c3 harness=claude kind=ship mode=no-mistakes yolo=off window=primary:fm-perch-stale-c3 worktree=/private/var/folders/dl/tpw6wbvd18z24n2q2842lb500000gn/T/fm-lab.KcQUQf/pool/.treehouse/nido-db85b7/2/nido

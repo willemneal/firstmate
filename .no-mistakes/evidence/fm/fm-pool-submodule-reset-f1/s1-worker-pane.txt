@@ -1,0 +1,13 @@
+ ▐▛███▛█   Claude Code v2.1.281
+▝▜██████▀  Opus 5.5 (1M context) · Claude Max
+  ▝▝ ▝▝    /private/var/folders/dl/tpw6wbvd18z24n2q2842lb500000gn/T/fm-lab.KcQUQf/pool/.treehouse/nido-db85b7/1/nido
+❯ : Firstmate operational input waiting: read '/private/var/folders/dl/tpw6wbvd18z24n2q2842lb500000gn/T/fm-lab.KcQUQf/state/operational-inbox/1792090447-5e0a97a208ce3817.msg' and handle its contents
+  as Firstmate operational input.
+  Read 1 file
+⏺ ok
+✻ Brewed for 5s · done 2:54 PM
+                                                                                                     tmux detected · scroll with PgUp/PgDn · or add 'set -g mouse on' to ~/.tmux.conf for wheel scroll
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← 3 agents

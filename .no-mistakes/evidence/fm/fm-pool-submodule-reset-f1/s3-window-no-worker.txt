@@ -1,0 +1,5 @@
+Run "treehouse update" to update
+🌳 Setting up worktree...
+🌳 Entered worktree at /var/folders/dl/tpw6wbvd18z24n2q2842lb500000gn/T/fm-lab.KcQUQf/pool/.treehouse/nido-db85b7/1/nido. Type 'exit' to return.
+…/nido  HEAD [!]
+❯

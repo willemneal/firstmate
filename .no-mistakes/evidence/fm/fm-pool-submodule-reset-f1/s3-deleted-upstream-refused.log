@@ -1,0 +1,4 @@
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /var/folders/dl/tpw6wbvd18z24n2q2842lb500000gn/T//fm-lab.KcQUQf
+warning: /var/folders/dl/tpw6wbvd18z24n2q2842lb500000gn/T//fm-lab.KcQUQf/data/perch-unpushed-d4/launch-brief.md records no ship branch; defaulting to legacy branch fm/perch-unpushed-d4
+warning: /var/folders/dl/tpw6wbvd18z24n2q2842lb500000gn/T//fm-lab.KcQUQf/data/perch-unpushed-d4/launch-brief.md records no delivery contract line (scaffolded before ship briefs recorded one); launching on the explicit --mode no-mistakes - confirm its definition of done matches
+error: pooled worktree '/private/var/folders/dl/tpw6wbvd18z24n2q2842lb500000gn/T/fm-lab.KcQUQf/pool/.treehouse/nido-db85b7/1/nido' is not clean; refusing to discard uncommitted work while refreshing its base

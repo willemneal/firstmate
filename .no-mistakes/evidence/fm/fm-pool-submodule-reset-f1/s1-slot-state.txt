@@ -1,0 +1,7 @@
+## slot state at launch
+HEAD: 06efb51 branch: 
+origin/main: 06efb51
+submodule status:
+ ef0aad837639b93e79e6de73fbdb021b395ad03f vendor/perch (remotes/origin/main)
+git status --porcelain (empty = clean):
+---
